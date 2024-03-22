@@ -68,48 +68,10 @@ with st.sidebar:
     )
 
 # Choose between file upload and camera
-upload_option = st.radio("Choose option:", ("Upload from Local Device", "Capture from Camera"))
+# upload_option = st.radio("Choose option:", ("Upload from Local Device", "Capture from Camera"))
 
-if upload_option == "Upload from Local Device":
-    # File upload section
-    uploaded_files = st.file_uploader("Upload Image or Video", type=["jpg", "jpeg", "png", "mp4"],
+uploaded_files = st.file_uploader("Upload Image or Video", type=["jpg", "jpeg", "png", "mp4"],
                                       accept_multiple_files=True)
-
-
-
-elif upload_option == "Capture from Camera":
-    video_frames = []
-
-    def video_frame_callback(frame):
-        img = frame.to_ndarray(format="bgr24")
-        video_frames.append(img)
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-    def save_video(frames, output_path=r"UploadedFile\video.mp4", fps=30):
-        
-        os.makedirs("UploadedFile", exist_ok=True)
-
-        # Convert frames from BGR to RGB
-        frames_rgb = [Image.fromarray(frame[..., ::-1]) for frame in frames]
-        
-        # Create a clip from the list of frames
-        clip = ImageSequenceClip(frames_rgb, fps=fps)
-        
-        # Write the clip to a video file
-        clip.write_videofile(output_path, fps=fps)
-        
-        return output_path
-
-    def on_stop_callback():
-        saved_video_path = save_video(video_frames)
-        print("Video saved to:", saved_video_path)
-        del video_frames[:]
-
-    webrtc_streamer(
-        key="example",
-        video_frame_callback=video_frame_callback,
-        on_video_ended=on_stop_callback
-    )
 
 
 # Location input section
@@ -122,40 +84,6 @@ selected_type = st.selectbox("Incident Type", incident_types)
 submit_button = st.button("Submit Report")
 
 if submit_button:
-
-    if upload_option == "Capture from Camera":
-            
-        try:
-            with open(r"UploadedFile\video.mp4", "rb") as f:
-                file_bytes = f.read()
-
-            res = st.session_state.validator.validate(r"UploadedFile\video.mp4", selected_type)
-
-            if not res:
-                raise Exception("The data looks incorrect! Kindly retry")
-
-            incident_data = []
-
-            incident_data.append({
-                        "file_content": file_bytes,
-                        "file_type": "video/mp4"
-                    })
-            
-            collection.insert_one({
-                    "incident_data": incident_data,
-                    "location": location,
-                    "incident_type": selected_type,
-                    "timestamp": datetime.datetime.now()
-                })
-
-            st.success("Incident reports submitted successfully!")
-        except Exception as e:
-            st.warning(f"{e}")
-
-
-    elif upload_option == "Upload from Local Device":
-        # File upload section
-
         if uploaded_files is not None:
             save_uploaded_files(uploaded_files)
             incident_data = []  # Initialize incident_data list
