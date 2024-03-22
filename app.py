@@ -36,7 +36,7 @@ if 'validator' not in st.session_state:
 # MongoDB Atlas connection details (replace with your actual credentials)
 client = MongoClient(f"mongodb+srv://shieldinnovsense:{MONGO_URL}")
 db = client["CampusGuard"]  # Replace with your database name
-collection = db["UserReports3"]  # Replace with your collection name
+collection = db["UserReports5"]  # Replace with your collection name
 
 # Incident type options
 incident_types = ["Mobile Phone", "No Helmet", "Sleeping", "Triples", "Violence"]
