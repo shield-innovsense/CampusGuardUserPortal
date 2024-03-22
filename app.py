@@ -2,30 +2,54 @@ import datetime
 import os
 import streamlit as st
 from pymongo import MongoClient
-from dotenv import load_dotenv
+from streamlit_webrtc import webrtc_streamer
+import av
+from PIL import Image
+from moviepy.editor import ImageSequenceClip
+from validator_deploy import DataValidator
+import tempfile
 
-load_dotenv()
+# Create a temporary directory to store uploaded files
+temp_dir = tempfile.TemporaryDirectory()
+temp_dir_path = temp_dir.name
 
-url = os.getenv("MONGODB_CLIENT")
+MONGO_URL = os.getenv("MONGO_URL")
 
-client = MongoClient(url)
+def save_uploaded_files(uploaded_files):
+    for uploaded_file in uploaded_files:
+        file_extension = uploaded_file.name.split(".")[-1].lower()
+        # if file_extension == "mp4":
+        #     continue
+
+        with open(os.path.join(temp_dir_path, uploaded_file.name), "wb") as f:
+            f.write(uploaded_file.read())
+
+
+
+
+if 'validator' not in st.session_state:
+    st.session_state.validator = DataValidator()
+
+# MongoDB Atlas connection details (replace with your actual credentials)
+client = MongoClient(f"mongodb+srv://shieldinnovsense:{MONGO_URL}")
 db = client["CampusGuard"]  # Replace with your database name
-collection = db["UserReports"]  # Replace with your collection name
-
-
+collection = db["UserReports3"]  # Replace with your collection name
 
 # Incident type options
 incident_types = ["Mobile Phone", "No Helmet", "Sleeping", "Triples", "Violence"]
-places = ["Kalaiarangam","ECE Department","Chemical Engineering Department","Department of Biomedical Engineering","Imperial Hall Entrance","ATM","1st Year Block Entrance","Mario Juicy","UCC and Mathampatty Pakashala","Gym Entrance","Hostel Entrance","Ganesh Cafe","Just Print","Pond","Admin Block Entrance 1","Admin Block Entrance 2","OAT Entrance","Royal Kitchen","Bosch Lab","CSE Department Entrance","Sangamam Club House","Civil Block Entrance","Car Parking","Dining Hall","Bike Parking","Ground Turning 1","Library","Coffee House","1st Year Mario","E-Gate","Staff Car Parking","Water Purifier","2nd Year AD Classroom","HOD Office","3rd AD Year Class","Steps","Round Table","4th AD Year Class","AI Lab","Staff Room","Admin Block","Principal Office","S&H Block Entrance"]
-# st.title("Incident Reporting App")
-# st.markdown("<h1 style='text-align: center; font-size: 2.9em;'>Your writing, Expertly Crafted</h1>", unsafe_allow_html=True)
-st.markdown("<h1 style='text-align: center; font-size: 3.5em;'>Campus <span style='color: green;'>Guard</span></h1>", unsafe_allow_html=True)
+places = ["Kalaiarangam", "ECE Department", "Chemical Engineering Department", "Department of Biomedical Engineering",
+          "Imperial Hall Entrance", "ATM", "1st Year Block Entrance", "Mario Juicy", "UCC and Mathampatty Pakashala",
+          "Gym Entrance", "Hostel Entrance", "Ganesh Cafe", "Just Print", "Pond", "Admin Block Entrance 1",
+          "Admin Block Entrance 2", "OAT Entrance", "Royal Kitchen", "Bosch Lab", "CSE Department Entrance",
+          "Sangamam Club House", "Civil Block Entrance", "Car Parking", "Dining Hall", "Bike Parking",
+          "Ground Turning 1", "Library", "Coffee House", "1st Year Mario", "E-Gate", "Staff Car Parking",
+          "Water Purifier", "2nd Year AD Classroom", "HOD Office", "3rd AD Year Class", "Steps", "Round Table",
+          "4th AD Year Class", "AI Lab", "Staff Room", "Admin Block", "Principal Office", "S&H Block Entrance"]
+
+st.markdown("<h1 style='text-align: center; font-size: 3.5em;'>Campus <span style='color: green;'>Guard</span></h1>",
+            unsafe_allow_html=True)
 
 with st.sidebar:
-   
-    # st.image("image-removebg-preview.png",width=220)
-    st.markdown("<h1 style='text-align: center; font-size: 2.3em;'><span style='color: green;'><span style='font-weight:bold;'>K</span>PR</span> <span style='font-weight:bold;color: green;'>I</span>nstitute of <span style='color: green;'>E</span>ngineering and <span style='font-weight:bold;color: green;'>T</span>echnology</h1>", unsafe_allow_html=True)
-    # st.markdown("Introducing CampusGuard: Your go-to web app for reporting campus incidents. Developed by students at KPR Institute of Engineering and Technology, CampusGuard allows users to quickly report concerns like violence, ragging, and unauthorized activities. Join us in fostering a safer campus environment today.")
     st.markdown(
         """
         <div style="padding: 20px;">
@@ -39,41 +63,134 @@ with st.sidebar:
         """,
         unsafe_allow_html=True
     )
-    
 
-# File upload section
-# uploaded_file = st.file_uploader("**Upload Image or Video**", type=["jpg", "jpeg", "png", "mp4","multiple"])
-uploaded_files= st.file_uploader("Upload Image or Video", type=["jpg", "jpeg", "png", "mp4"], accept_multiple_files=True)
+# Choose between file upload and camera
+upload_option = st.radio("Choose option:", ("Upload from Local Device", "Capture from Camera"))
 
+if upload_option == "Upload from Local Device":
+    # File upload section
+    uploaded_files = st.file_uploader("Upload Image or Video", type=["jpg", "jpeg", "png", "mp4"],
+                                      accept_multiple_files=True)
+
+
+
+elif upload_option == "Capture from Camera":
+    video_frames = []
+
+    def video_frame_callback(frame):
+        img = frame.to_ndarray(format="bgr24")
+        video_frames.append(img)
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+    def save_video(frames, output_path=r"UploadedFile\video.mp4", fps=30):
+        
+        os.makedirs("UploadedFile", exist_ok=True)
+
+        # Convert frames from BGR to RGB
+        frames_rgb = [Image.fromarray(frame[..., ::-1]) for frame in frames]
+        
+        # Create a clip from the list of frames
+        clip = ImageSequenceClip(frames_rgb, fps=fps)
+        
+        # Write the clip to a video file
+        clip.write_videofile(output_path, fps=fps)
+        
+        return output_path
+
+    def on_stop_callback():
+        saved_video_path = save_video(video_frames)
+        print("Video saved to:", saved_video_path)
+        del video_frames[:]
+
+    webrtc_streamer(
+        key="example",
+        video_frame_callback=video_frame_callback,
+        on_video_ended=on_stop_callback
+    )
 
 
 # Location input section
-location = st.selectbox("**Incident Location**",places)
+location = st.selectbox("Incident Location", places)
 
 # Incident type selection section
-selected_type = st.selectbox("**Incident Type**", incident_types)
+selected_type = st.selectbox("Incident Type", incident_types)
 
 # Submit button
-submit_button = st.button("**Submit Report**")
+submit_button = st.button("Submit Report")
 
 if submit_button:
-    if uploaded_files is not None:
-        for uploaded_file in uploaded_files:
-            # Read the uploaded file content
-            file_bytes = uploaded_file.read()
 
-            # Create a dictionary for each file
-            incident_data = {
-                "file_content": file_bytes,
-                "file_type": uploaded_file.type,
-                "location": location,
-                "incident_type": selected_type,
-                "timestamp": datetime.datetime.now()
-            }
+    if upload_option == "Capture from Camera":
+            
+        try:
+            with open(r"UploadedFile\video.mp4", "rb") as f:
+                file_bytes = f.read()
 
-            # Insert data into MongoDB collection
-            collection.insert_one(incident_data)
+            res = st.session_state.validator.validate(r"UploadedFile\video.mp4", selected_type)
 
-        st.success("Incident reports submitted successfully!")
-    else:
-        st.error("Please upload at least one image or video.")
+            if not res:
+                raise Exception("The data looks incorrect! Kindly retry")
+
+            incident_data = []
+
+            incident_data.append({
+                        "file_content": file_bytes,
+                        "file_type": "video/mp4"
+                    })
+            
+            collection.insert_one({
+                    "incident_data": incident_data,
+                    "location": location,
+                    "incident_type": selected_type,
+                    "timestamp": datetime.datetime.now()
+                })
+
+            st.success("Incident reports submitted successfully!")
+        except Exception as e:
+            st.warning(f"{e}")
+
+
+    elif upload_option == "Upload from Local Device":
+        # File upload section
+
+        if uploaded_files is not None:
+            save_uploaded_files(uploaded_files)
+            incident_data = []  # Initialize incident_data list
+            try:
+                for uploaded_file in uploaded_files:
+
+                    path = os.path.join(temp_dir_path, uploaded_file.name)
+
+                    res = st.session_state.validator.validate(path, selected_type)
+                    if not res:
+                        continue
+
+                    with open(path, "rb") as f:
+                        file_bytes = f.read()
+
+                    # Create a dictionary for each file
+                    incident_data.append({
+                        "file_content": file_bytes,
+                        "file_type": uploaded_file.type
+                    })
+                    # print(incident_data)
+
+                if incident_data:
+                    # Insert data into MongoDB collection with incident_data containing all images
+                    collection.insert_one({
+                        "incident_data": incident_data,
+                        "location": location,
+                        "incident_type": selected_type,
+                        "timestamp": datetime.datetime.now()
+                    })
+
+                    st.success("Incident reports submitted successfully!")
+                else:
+                    st.warning("No Data to Upload")
+
+                temp_dir.cleanup()
+
+            except Exception as e:
+                st.warning(f"Error occurred while uploading files. {e}")
+        else:
+            st.error("Please upload at least one image or video.")
