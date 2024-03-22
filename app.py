@@ -8,6 +8,9 @@ from PIL import Image
 from moviepy.editor import ImageSequenceClip
 from validator_deploy import DataValidator
 import tempfile
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Create a temporary directory to store uploaded files
 temp_dir = tempfile.TemporaryDirectory()
